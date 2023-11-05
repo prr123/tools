@@ -14,31 +14,16 @@ import (
     "os"
 	"math/rand"
     "time"
+	"strconv"
 
     util "github.com/prr123/utility/utilLib"
 )
-
-func GenRanData (rangeStart, rangeEnd int) (bdat []byte) {
-
-    var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-    offset := rangeEnd - rangeStart
-
-    randLength := seededRand.Intn(offset) + rangeStart
-    bdat = make([]byte, randLength)
-
-    charset := "abcdefghijklmnopqrstuvw0123456789"
-    for i := range bdat {
-        bdat[i] = charset[seededRand.Intn(len(charset)-1)]
-    }
-    return bdat
-}
 
 
 func main() {
 
     numarg := len(os.Args)
-    flags:=[]string{"dbg","name","size"}
+    flags:=[]string{"dbg","name","size", "two"}
 
     useStr := "./genFile /name=filnam /size=n [/dbg]"
     helpStr := "program that generates files with random content of size n\n"
@@ -61,12 +46,18 @@ func main() {
 	dbg:= false
     _, ok := flagMap["dbg"]
     if ok {dbg = true}
+/*
     if dbg {
 		fmt.Printf("dbg -- flag list:\n")
         for k, v :=range flagMap {
             fmt.Printf("  flag: /%s value: %s\n", k, v)
         }
     }
+*/
+
+	two:= false
+    _, ok = flagMap["two"]
+    if ok {two = true}
 
 	filnam :=""
     namval, ok := flagMap["name"]
@@ -94,26 +85,49 @@ func main() {
 		fmt.Println("******* end cli flags and their parameters ****")
 	}
 
-	// check whether file exists
+	filsiz, err := CvtSize(sizeStr, two)
+	if err != nil { log.Fatalf("error -- file size is not convertible: %v\n",err)} 
+	fmt.Printf("file size[%t]:  %d\n", two, filsiz)
 
+	fil, err := CreateFile(filnam)
+	if err != nil {log.Fatalf("error -- CreateFile: %v\n", err)}
 
-	// if not create one
+	err = FillFile(fil, filsiz, 0)
+	fil.Close()
+	if err != nil {log.Fatalf("error -- CreateFile: %v\n", err)}
 
-	filsiz, err := CvtSize(sizeStr)
-	if err != nil { log.Fatalf("file size is not convertible: %v\n",err)} 
-	fmt.Printf("file size: %d\n", filsiz)
 	log.Println("success genFile!")
 }
 
 
-func CvtSize(sizeStr string) (siz int64, err error) {
+func FillFile(fil *os.File, filsiz uint64, opt int) (err error) {
+
+	if fil==nil {return fmt.Errorf("no file pointer!")}
+
+//	bdat := make([]byte, filsiz)
+	bdat := []byte{}
+	switch opt {
+	//alpha numeric
+	case 0:
+		bdat = GenData(int(filsiz))
+	default:
+		return fmt.Errorf("unknown option!")
+	}
+
+	n, err := fil.Write(bdat)
+	if err != nil {return fmt.Errorf("os.Write: %v", err)}
+	fmt.Printf("size: %d len: %d n: %d\n", filsiz, len(bdat), n)
+	return nil
+}
+
+func CvtSize(sizeStr string, two bool) (siz uint64, err error) {
 
 	// check last letter of size
 	let := sizeStr[len(sizeStr) -1]
 	fmt.Printf("last letter: %q ", let)
 
 	// if last letter is a letter, convert the rest into a number
-	var mult int64 = 1
+	var mult uint64 = 1
 	switch let {
 	case 'K':
 		mult = 1000
@@ -124,17 +138,79 @@ func CvtSize(sizeStr string) (siz int64, err error) {
 	case 'G':
 		mult = 1000000000
 
-//	case 
-//		fmt.Printf("number")
-
 	default:
 		if !util.IsNumeric(let) {
-			return -1 , fmt.Errorf("let is not alphaNumeric!")
+			return 0 , fmt.Errorf("let is not alphaNumeric!")
 		}
 	}
-	fmt.Printf("size mult: %d\n", mult)
+//	fmt.Printf("size mult: %d\n", mult)
 
-	return siz, nil
+	intStr:=""
+    if mult>1 {
+        intStr = string(sizeStr[:len(sizeStr)-1])
+    } else {
+        intStr = string(sizeStr[:len(sizeStr)])
+    }
+
+    inum, err := strconv.Atoi(intStr)
+    if err !=nil {return 0, fmt.Errorf("error -- cannot convert intStr: %s: %v", intStr, err)}
+    num := uint64(inum)*uint64(mult)
+
+    fmt.Printf("res: %d\n", inum)
+
+	if !two {return num, nil}
+
+    num--
+    num = num | num>>1
+    num = num | num>>2
+    num = num | num>>4
+    num = num | num>>8
+    num = num | num>>16
+    num = num | num>>32
+    num++
+
+	return num, nil
+}
+
+func CreateFile(filnam string)(fn *os.File, err error) {
+
+	// check whether file exists
+	if _, err := os.Stat(filnam); err == nil {
+		return nil, fmt.Errorf("file <%s> does exist!", filnam)
+	}
+	// if not create one
+	fn, err = os.Create(filnam)
+	if err != nil {return nil, fmt.Errorf("osCreate: %v", err)}
+	return fn, nil
 }
 
 
+
+func GenData (siz int) (bdat []byte) {
+
+    var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+    bdat = make([]byte, siz)
+
+    charset := "abcdefghijklmnopqrstuvw0123456789"
+    for i := range bdat {
+        bdat[i] = charset[seededRand.Intn(len(charset)-1)]
+    }
+    return bdat
+}
+
+func GenRanData (rangeStart, rangeEnd int) (bdat []byte) {
+
+    var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+    offset := rangeEnd - rangeStart
+
+    randLength := seededRand.Intn(offset) + rangeStart
+    bdat = make([]byte, randLength)
+
+    charset := "abcdefghijklmnopqrstuvw0123456789"
+    for i := range bdat {
+        bdat[i] = charset[seededRand.Intn(len(charset)-1)]
+    }
+    return bdat
+}
