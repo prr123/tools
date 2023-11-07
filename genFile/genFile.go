@@ -62,18 +62,18 @@ func main() {
 	filnam :=""
     namval, ok := flagMap["name"]
     if !ok {
-        log.Fatalf("no name flag provided in cli!")
+        log.Fatalf("error -- cli: no name flag provided in cli!")
     } else {
-        if namval.(string) == "none" {log.Fatalf("-- error: no file name  provided with /name flag!")}
+        if namval.(string) == "none" {log.Fatalf("error -- cli: no file name  provided with /name flag!")}
         filnam = namval.(string)
     }
 
 	sizeStr :=""
     sizval, ok := flagMap["size"]
     if !ok {
-        log.Fatalf("no size flag provided in cli!")
+        log.Fatalf("error -- cli: no size flag provided in cli!")
     } else {
-        if sizval.(string) == "none" {log.Fatalf("-- error: size value provided with /size flag!")}
+        if sizval.(string) == "none" {log.Fatalf("error -- clis: no size value provided with /size flag!")}
         sizeStr = sizval.(string)
     }
 
@@ -92,6 +92,8 @@ func main() {
 	fil, err := CreateFile(filnam)
 	if err != nil {log.Fatalf("error -- CreateFile: %v\n", err)}
 
+	// last parameter is option
+	// currently only opt val 0 implemented
 	err = FillFile(fil, filsiz, 0)
 	fil.Close()
 	if err != nil {log.Fatalf("error -- CreateFile: %v\n", err)}
